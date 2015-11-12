@@ -1,5 +1,4 @@
 import librosa
-import numpy as np
 
 from note import Note
 
