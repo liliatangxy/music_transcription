@@ -32,12 +32,12 @@ def determine_pitches(y, sr):
             if d[j][i] >= threshold:
                 current_n[j][1] += 1
                 if i == d.shape[0] - 1:
-                    start = librosa.core.frames_to_time(current_n[j][0])
+                    start = librosa.core.frames_to_time(i)
                     duration = librosa.core.frames_to_time(current_n[j][1])
                     new_note = note.Note(j, start, duration)
                     note_list.append(new_note)
             elif current_n[j][1] != 0:
-                start = librosa.core.frames_to_time(current_n[j][0])
+                start = librosa.core.frames_to_time(i)
                 duration = librosa.core.frames_to_time(current_n[j][1])
                 new_note = Note(j, start, duration)
                 note_list.append(new_note)
