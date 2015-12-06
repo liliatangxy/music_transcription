@@ -51,9 +51,9 @@ def find_extrema(y_axis, window=1):
     peaks = []
     valleys = []
     length = len(y_axis)
-    if y_axis[0] == y_axis[:window+1].max():
+    if y_axis[0] == y_axis[:window+1].max() and y_axis[0] != 0:
         peaks.append(0)
-    elif y_axis[0] == y_axis[:window+1].min():
+    elif y_axis[0] == y_axis[:window+1].min() and y_axis[0] != 0:
         valleys.append(0)
     for i in range(window, length-window):
         dif_before = y_axis[i]-y_axis[i-window]
@@ -63,8 +63,14 @@ def find_extrema(y_axis, window=1):
                 peaks.append(i)
             if dif_before < 0:
                 valleys.append(i)
-    if y_axis[length-1] == y_axis[-window-1:].max():
+        elif y_axis[i-window] == 0 and dif_before != 0:
+            # forcefully append min after 0
+            valleys.append(i)
+        elif y_axis[i+window] == 0 and dif_after != 0:
+            # forcefully append min before 0
+            valleys.append(i)
+    if y_axis[length-1] == y_axis[-window-1:].max() and y_axis[length-1] != 0:
         peaks.append(length-1)
-    elif y_axis[length-1] == y_axis[-window-1:].min():
+    elif y_axis[length-1] == y_axis[-window-1:].min() and y_axis[length-1] != 0:
         valleys.append(length-1)
     return peaks, valleys
