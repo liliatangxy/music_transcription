@@ -2,10 +2,24 @@ import librosa
 import numpy as np
 
 import note
+import peakprocessing
 
 '''
 Functions to process pitches
 '''
+
+# frequency range on piano
+min_freq = 27
+max_freq = 4308
+max_len = 97
+threshold = 31  # TODO: determine base threshold empirically
+time_multiplier = 4
+note_index = {'C':0, 'C#':1, 'D':2, 'D#':3,
+              'E':4, 'F':5, 'F#':6, 'G':7,
+              'G#':8, 'A':9, 'A#':10, 'B':11}
+index_note = {0:'C', 1:'C#', 2:'D', 3:'D#',
+              4:'E', 5:'F', 6:'F#', 7:'G',
+              8:'G#', 9:'A', 10:'A#', 11:'B'}
 
 def shift_pitch(y, sr):
     '''
@@ -16,33 +30,44 @@ def shift_pitch(y, sr):
     y_tune = librosa.effects.pitch_shift(y, sr, -tuning)
     return y_tune
 
-def determine_pitches(y, sr):
-    '''
-    Determines pitches
-    '''
+def determine_notes(y, sr):
     y_harmonic = librosa.effects.harmonic(y)
-    d = librosa.logamplitude(librosa.stft(y_harmonic, sr)**2, ref_power=np.max)
-    
-    note_list = [] # stores note with pitch, start time, duration in time
+    d = librosa.logamplitude(librosa.stft(y_harmonic, sr)**2)
 
-    current_n = [[0,0]] * d.shape[0] # current [start,duration] of note in loop
-    threshold = -8
-    for i in range(0, d.shape[1]):
-        for j in range(0, d.shape[0]):
-            if d[j][i] >= threshold:
-                current_n[j][1] += 1
-                if i == d.shape[0] - 1:
-                    start = librosa.core.frames_to_time(i)
-                    duration = librosa.core.frames_to_time(current_n[j][1])
-                    new_note = note.Note(j, start, duration)
-                    note_list.append(new_note)
-            elif current_n[j][1] != 0:
-                start = librosa.core.frames_to_time(i)
-                duration = librosa.core.frames_to_time(current_n[j][1])
-                new_note = Note(j, start, duration)
-                note_list.append(new_note)
-                current_n[j][0] = 0
-                current_n[j][1] = 0
-    # TODO may need to implement more efficient sort since notes are likely only unsorted within one measure
+    note_list = []
+
+    #for i in range(min_freq, max_freq):
+    #    d[i] = peakprocessing.smooth(d[i])
+    clustered = _cluster_notes(d)
+
+    for i in range(0, max_len):
+        peaks, valleys = peakprocessing.find_extrema(clustered[i])
+        for p in peaks:
+            while len(valleys) != 0 and valleys[0] < p:
+                valleys.remove(valleys[0])
+            if len(valleys) != 0:
+                duration = librosa.core.frames_to_time(frames=valleys[0]-p+1, sr=sr)
+            else:
+                duration = librosa.core.frames_to_time(frames=1, sr=sr)
+            start = librosa.core.frames_to_time(frames=p, sr=sr)
+            new_note = note.Note(name=index_note[i-12*int(i/12)], octave=int(i/12), start=time_multiplier*start, duration=time_multiplier*duration)
+            note_list.append(new_note)
     note_list.sort(key=lambda n: n.start)
     return note_list
+
+def _cluster_notes(d, low_freq=min_freq, high_freq=max_freq):
+    '''
+    Groups frequencies representing the same note
+    By default ignores notes not within piano frequency range
+    '''
+    clustered_notes = np.zeros((max_len, d.shape[1]))
+    for i in range(low_freq, high_freq):
+        n = librosa.core.hz_to_note(i)
+        p = n[0][:len(n[0])-1]
+        octave = n[0][len(n[0])-1]
+        index = 12*int(octave) + note_index[p]
+        for j in range(0, d.shape[1]):
+            if d[i][j] >= threshold:
+                clustered_notes[index][j] = max(d[i][j], clustered_notes[index][j])
+
+    return clustered_notes
