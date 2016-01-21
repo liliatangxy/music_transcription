@@ -66,7 +66,7 @@ def find_extrema(y_axis, window=1):
         elif y_axis[i-window] == 0 and dif_before != 0:
             # forcefully append min after 0
             valleys.append(i)
-        elif y_axis[i+window] == 0 and dif_after != 0:
+        elif y_axis[i+window] == 0 and dif_after >= 0:
             # forcefully append min before 0
             valleys.append(i)
     if y_axis[length-1] == y_axis[-window-1:].max() and y_axis[length-1] != 0:
