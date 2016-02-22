@@ -20,6 +20,9 @@ threshold = 34  # TODO: determine base threshold empirically
 note_index = {'C':0, 'C#':1, 'D':2, 'D#':3,
               'E':4, 'F':5, 'F#':6, 'G':7,
               'G#':8, 'A':9, 'A#':10, 'B':11}
+index_note = {0:'C', 1:'C#', 2:'D', 3:'E-',
+              4:'E', 5:'F', 6:'F#', 7:'G',
+              8:'A-', 9:'A', 10:'B-', 11:'B'}
 def shift_pitch(y, sr):
     '''
     Returns pitch shifted without percussion
@@ -41,14 +44,38 @@ def _hps(d):
         d[i] /= factor
     return d
 
+def _first_peaks(d_clustered):
+    print(d_clustered.shape[0], d_clustered.shape[1])
+    for i in range(0, d_clustered.shape[1]):
+        harmonics_idx = __detect_harmonics(d_clustered[:,i])
+        for h in harmonics_idx:
+            d_clustered[h][i] = 0
+    return d_clustered
+
+def __detect_harmonics(pitches_clustered):
+    '''
+    Returns indeces of potential harmonics
+    '''
+    # TODO values are already notes
+    potential_f0s = []
+    potential_harmonics = []
+    for j in range(0, len(pitches_clustered)):
+        potential_f0 = pitches_clustered[0]
+        potential_f0s.append(potential_f0)
+        for i in range(j+1, len(pitches_clustered)):
+            f = pitches_clustered[i]
+            if round((f-potential_f0) / 12) - (f-potential_f0) / 12 == 0:
+                potential_harmonics.append(i)
+    return potential_harmonics
+
 def detect_pitches(y, sr):
     '''
     Returns a list of notes
     Detected through STFT and HPS
     '''
     y_harmonic = librosa.effects.harmonic(y)
-    onset_frame = librosa.onset.onset_detect(y_harmonic, sr=sr)
-    d = librosa.stft(y_harmonic, sr=sr)
+    #onset_frame = librosa.onset.onset_detect(y_harmonic, sr=sr)
+    d = librosa.stft(y_harmonic, sr)
 
     d = _hps(d)
     d = librosa.logamplitude(d**2)
@@ -57,9 +84,9 @@ def detect_pitches(y, sr):
 
     #for i in range(min_freq, max_freq):
     #    d[i] = peakprocessing.smooth(d[i])
-    clustered = __cluster_notes(d)
-    return d
-   
+    clustered = _first_peaks(__cluster_notes(d))
+    return stft_to_notes(clustered)
+
 def __cluster_notes(d, low_freq=min_freq, high_freq=max_freq):
     '''
     Groups frequencies representing the same note
@@ -77,3 +104,32 @@ def __cluster_notes(d, low_freq=min_freq, high_freq=max_freq):
                 #if clustered_notes[index][j] > threshold:
                     #print(index_note[index-12*int(index/12)], int(index/12), j, clustered_notes[index][j])
     return clustered_notes
+
+def stft_to_notes(d):
+    '''
+    Uses result from stft after clustering frequencies representing the same note to create a list of Notes
+    '''
+    note_list = []
+    for i in range(0, max_len):
+        peaks, valleys = peakprocessing.find_extrema(d[i])
+        for p in peaks:
+            while len(valleys) != 0 and valleys[0] < p:
+                valleys.remove(valleys[0])
+            if len(valleys) != 0:
+                print(index_note[i-12*int(i/12)], int(i/12), p, valleys[0], d[i][p], d[i][valleys[0]])
+                for j in range(p, valleys[0]):
+                    print(d[i][j])
+                #duration = librosa.core.frames_to_time(frames=valleys[0]-p+1, sr=sr)
+                duration = valleys[0]-p+1
+            else:
+                #duration = librosa.core.frames_to_time(frames=1, sr=sr)
+                duration = 1
+            #start = librosa.core.frames_to_time(frames=p, sr=sr)
+            start = p
+            new_note = note.Note(name=index_note[i-12*int(i/12)], octave=int(i/12), start=start, duration=duration)
+            note_list.append(new_note)
+    note_list.sort(key=lambda n: n.start)
+
+    for i in note_list:
+        print(i.name, i.octave, i.start, i.duration)
+    return note_list
